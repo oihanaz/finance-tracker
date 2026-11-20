@@ -133,6 +133,10 @@ button.item-link{width:100%;background:none;border:0;padding:0;text-align:left;c
 .ghead{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;color:var(--ink2);padding:16px 0 2px;border-bottom:1px solid var(--line)}
 .ghead:first-child{padding-top:2px}
 .balin{width:116px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.balwrap{display:flex;align-items:center;gap:0}@supports (field-sizing:content){.balin{field-sizing:content;width:auto;min-width:4ch}}.balwrap .cur{color:var(--muted);font-weight:500}
+.abar{height:4px;border-radius:3px;margin:-3px 0 11px;opacity:.9}
+.ic{position:relative;display:inline-flex}
+.badge{position:absolute;top:-5px;left:calc(100% - 8px);min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--neg);color:#fff;font-style:normal;font-size:11px;font-weight:700;line-height:17px;text-align:center}
 .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;margin-bottom:2px}
 .seg button{border:0;background:none;padding:7px 20px;border-radius:999px;color:var(--muted);font-weight:650;cursor:pointer}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
@@ -760,6 +764,30 @@ function vActivity(){
 }
 
 /* ---------- wealth ---------- */
+const TYPECOL={investment:'var(--s1)',property:'var(--s4)',checking:'var(--s3)',savings:'var(--s3)',debt:'var(--neg)'};
+function curSym(){try{return new Intl.NumberFormat(undefined,{style:'currency',currency:S.settings.currency,currencyDisplay:'narrowSymbol'}).formatToParts(0).find(p=>p.type==='currency').value}catch(e){return S.settings.currency}}
+function chartWealth(el){
+  let first=null;for(const a of S.accounts)for(const k in a.bal)if(first===null||k<first)first=k;
+  if(!first){el.innerHTML='<div class="empty">Add an account to start the history.</div>';return}
+  let m0=addMonth(ui.month,-11);if(m0<first)m0=first;if(m0>ui.month)m0=ui.month;
+  const months=[];for(let m=m0;m<=ui.month;m=addMonth(m,1))months.push(m);
+  const data=months.map(m=>{const o={inv:0,prop:0,cash:0,debt:0};for(const a of S.accounts){const v=balAt(a,m);if(v==null)continue;const x=v*a.share/100;
+      if(a.type==='investment')o.inv+=x;else if(a.type==='property')o.prop+=x;else if(a.type==='debt')o.debt+=x;else o.cash+=x}
+    o.net=o.inv+o.prop+o.cash-o.debt;return o});
+  const W=Math.max(280,el.clientWidth),H=W<420?200:240,L=W<420?34:42,R=6,T=22,B=22;
+  const {max,step}=nice(Math.max(1,...data.map(d=>Math.max(0,d.inv)+Math.max(0,d.prop)+Math.max(0,d.cash))));
+  const n=months.length,slot=(W-L-R)/n,bw=Math.min(34,slot*.62),y=v=>T+(H-T-B)*(1-v/max);
+  const seg=(x,y0,y1,fill,top)=>{const h=y0-y1;if(h<.5)return'';const r=top?Math.min(5,h/2):0;return `<path d="M${x},${y0}V${y1+r}${r?`q0,-${r} ${r},-${r}H${x+bw-r}q${r},0 ${r},${r}`:`H${x+bw}`}V${y0}Z" fill="${fill}"/>`};
+  let g=axis(W,H,L,R,T,B,max,step);
+  data.forEach((d,i)=>{const x=L+slot*i+(slot-bw)/2,parts=[[Math.max(0,d.inv),'var(--s1)'],[Math.max(0,d.prop),'var(--s4)'],[Math.max(0,d.cash),'var(--s3)']].filter(p=>p[0]>0);
+    let acc=0;parts.forEach((p,j)=>{const y0=y(acc)-(j?2:0),y1=y(acc+p[0]);acc+=p[0];g+=seg(x,y0,y1,p[1],j===parts.length-1)});
+    const mm=months[i],lbl=n>8&&W<420?mShort(mm)[0]:mShort(mm);
+    g+=`<text x="${x+bw/2}" y="${H-6}" text-anchor="middle" ${mm===ui.month?'style="fill:var(--ink);font-weight:600"':''}>${lbl}</text>`;
+    const tip=`<b>${mLabel(mm)}</b>`+(d.inv?tipRow('Investments',money0(d.inv)):'')+(d.prop?tipRow('Property',money0(d.prop)):'')+tipRow('Cash and savings',money0(d.cash))+(d.debt?tipRow('Debts','−'+money0(d.debt)):'')+tipRow('Net worth',money0(d.net));
+    g+=`<rect class="hit" x="${L+slot*i}" y="${T}" width="${slot}" height="${H-T-B}" data-tip="${esc(tip)}"/>`;
+    if(i===n-1)g+=`<text x="${x+bw/2}" y="${y(Math.max(0,d.inv)+Math.max(0,d.prop)+Math.max(0,d.cash))-7}" text-anchor="middle" style="fill:var(--ink);font-weight:600;font-size:12px">${money0(d.net)}</text>`});
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Net worth by month, split by type">${g}</svg>`;
+}
 function vWealth(){
   return `<div class="stack"><div><div class="seg" role="tablist"><button role="tab" data-act="wtab" data-arg="accounts" class="${ui.wtab==='accounts'?'on':''}">Accounts</button><button role="tab" data-act="wtab" data-arg="invest" class="${ui.wtab==='invest'?'on':''}">Investments</button></div></div>${ui.wtab==='invest'?vInvest():vAccounts()}</div>`;
 }
@@ -767,11 +795,16 @@ const WGROUPS=[['Cash and savings',a=>a.type==='checking'||a.type==='savings'],[
 function vAccounts(){
   const m=ui.month,nw=nwAt(m)||{mine:0,full:0,others:0},shared=S.accounts.some(a=>a.share<100);
   const mineOf=a=>(balAt(a,m)||0)*a.share/100*(a.type==='debt'?-1:1);
-  const arow=a=>{const v=balAt(a,m),has=a.bal[m]!=null,open=ui.openRow==='a'+a.id;
-    return `<div class="item"><div class="imain"><button class="itxt" data-act="openrow" data-arg="a${a.id}" aria-expanded="${open}"><b>${esc(a.name)}</b><small>${esc(clsName(clsOf(a)))}${a.share<100?' · '+a.share+'% yours':''}${v!=null&&!has?' · carried over':''}</small></button><input class="balin ghostin" type="number" step="0.01" inputmode="decimal" value="${v??''}" placeholder="balance" data-change="accbal" data-id="${a.id}" aria-label="Balance of ${esc(a.name)} for ${mLabel(m)}"></div>
+  const maxAbs=Math.max(1,...S.accounts.map(a=>Math.abs(mineOf(a)))),sym=curSym();
+  const arow=a=>{const v=balAt(a,m),has=a.bal[m]!=null,open=ui.openRow==='a'+a.id,w=Math.abs(mineOf(a))/maxAbs*100;
+    return `<div class="item"><div class="imain"><button class="itxt" data-act="openrow" data-arg="a${a.id}" aria-expanded="${open}"><b>${esc(a.name)}</b><small>${esc(clsName(clsOf(a)))}${a.share<100?' · '+a.share+'% yours':''}${v!=null&&!has?' · carried over':''}</small></button><span class="balwrap"><span class="cur">${esc(sym)}</span><input class="balin ghostin" type="number" step="0.01" inputmode="decimal" value="${v??''}" placeholder="0" data-change="accbal" data-id="${a.id}" aria-label="Balance of ${esc(a.name)} for ${mLabel(m)}"></span></div>
+    ${w>0?`<div class="abar" style="width:${Math.max(1.5,w).toFixed(1)}%;background:${TYPECOL[a.type]}"></div>`:''}
     ${open?`<div class="iedit"><label class="full">Name<input type="text" value="${esc(a.name)}" data-change="accname" data-id="${a.id}"></label><label>Type<select data-change="acctype" data-id="${a.id}">${Object.keys(TYPES).map(k=>`<option value="${k}"${k===a.type?' selected':''}>${TYPES[k]}</option>`).join('')}</select></label><label>Asset class<select data-change="acccls" data-id="${a.id}">${S.settings.classes.map(c=>`<option value="${c.id}"${c.id===clsOf(a)?' selected':''}>${esc(c.name)}</option>`).join('')}</select></label><label>My share %<input type="number" min="0" max="100" step="1" inputmode="numeric" value="${a.share}" data-change="accshare" data-id="${a.id}"></label><label>&nbsp;<button class="btn danger" data-act="delacc" data-arg="${a.id}">${ui.confirm==='acc'+a.id?'Tap again to delete':'Delete account'}</button></label></div>`:''}</div>`};
   const groups=WGROUPS.map(([name,f])=>{const as=S.accounts.filter(f);if(!as.length)return'';return `<div class="ghead"><span>${name}</span><span class="num">${money0(sum(as.map(mineOf)))}</span></div>${as.map(arow).join('')}`}).join('');
-  return `<div class="minis" style="grid-template-columns:repeat(${shared?3:1},minmax(0,1fr))"><div class="mini"><div class="label">Yours${nw.est?' · estimate':''}</div><div class="v">${money0(nw.mine)}</div></div>${shared?`<div class="mini"><div class="label">Others’ share</div><div class="v">${money0(nw.others)}</div></div><div class="mini"><div class="label">Full balances</div><div class="v">${money0(nw.full)}</div></div>`:''}</div>
+  const types=[['investment','Investments'],['property','Property'],['checking','Cash and savings']].filter(([k])=>S.accounts.some(a=>(k==='checking'?(a.type==='checking'||a.type==='savings'):a.type===k)&&Object.keys(a.bal).length));
+  return `${shared?`<div class="minis"><div class="mini"><div class="label">Yours${nw.est?' · estimate':''}</div><div class="v">${money0(nw.mine)}</div></div><div class="mini"><div class="label">Others’ share</div><div class="v">${money0(nw.others)}</div></div><div class="mini"><div class="label">Full balances</div><div class="v">${money0(nw.full)}</div></div></div>`:''}
+  <div class="card"><h2>Net worth by month</h2><div class="sub">What it is made of, last 12 months${shared?'. Only your part of shared accounts.':'.'}</div>
+    <div class="legend">${types.map(([k,l])=>`<span><i style="background:${TYPECOL[k]}"></i>${l}</span>`).join('')}</div><div class="chart" data-chart="wealth"></div></div>
   <div class="card"><h2>Balances, ${mLabel(m)}</h2><div class="sub">Type each balance once a month. A month without an entry reuses the last one. For a joint account, set your share (e.g. 50) by tapping its name.</div>
     ${S.accounts.length?`<div class="list">${groups}</div>`:'<div class="empty">No accounts yet.</div>'}</div>
   <details class="card fold" data-fold="addacc"${ui.fold.addacc?' open':''}><summary><h2>Add an account</h2></summary>
@@ -943,7 +976,8 @@ function render(){
   $('#monthLabel').textContent=mLabel(ui.month);
   if(ui.locked){$('#pageTitle').textContent='';$('#sidenav').innerHTML='';$('#sidefoot').innerHTML='';$('#tabbar').innerHTML='';document.querySelector('.fab').hidden=true;renderSync();$('#banner').innerHTML='';$('#view').innerHTML=lockCard();return}
   $('#pageTitle').textContent=LABEL[ui.view]||'';
-  const link=k=>`<a href="#${k}" class="${k===ui.view||(k==='activity'&&ui.view==='import')?'on':''}"${k===ui.view?' aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg><span>${LABEL[k]}</span></a>`;
+  const unc=(S.tx[ui.month]||[]).filter(t=>!catMap[t.cat]).length;
+  const link=k=>`<a href="#${k}" class="${k===ui.view||(k==='activity'&&ui.view==='import')?'on':''}"${k===ui.view?' aria-current="page"':''}><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>${k==='activity'&&unc?`<em class="badge" title="${unc} to categorise">${unc>99?'99+':unc}</em>`:''}</span><span>${LABEL[k]}</span></a>`;
   const nav=NAV.map(link).join('');
   $('#sidenav').innerHTML=nav;$('#tabbar').innerHTML=nav;$('#sidefoot').innerHTML=link('settings');
   document.querySelector('.fab').hidden=!(ui.view==='home'||ui.view==='spending');
@@ -951,7 +985,7 @@ function render(){
   const f={home:vHome,spending:vSpending,activity:vActivity,wealth:vWealth,settings:vSettings,import:vImport}[ui.view];
   $('#view').innerHTML=f();drawCharts();
 }
-function drawCharts(){document.querySelectorAll('[data-chart]').forEach(el=>{const k=el.dataset.chart;if(k==='cashflow')chartCashflow(el);else if(k==='hero')chartHero(el);else if(k==='projection'&&ui._P)chartProjection(el,ui._P)})}
+function drawCharts(){document.querySelectorAll('[data-chart]').forEach(el=>{const k=el.dataset.chart;if(k==='cashflow')chartCashflow(el);else if(k==='hero')chartHero(el);else if(k==='wealth')chartWealth(el);else if(k==='projection'&&ui._P)chartProjection(el,ui._P)})}
 function route(){const h=location.hash.slice(1);ui.view=VIEWS.some(v=>v[0]===h)?h:'home';ui.confirm=null;ui.openRow=null;ui.msg='';if(S||ui.locked){render();window.scrollTo(0,0)}}
 window.addEventListener('hashchange',route);
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(drawCharts,150)});
