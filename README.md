@@ -26,7 +26,7 @@ The phone layout (bottom tabs, large balance, compact rows) appears automaticall
 
 ## 3. Move your existing data in
 
-In the copy you have been using: Budgets → **Save a backup file**. In the hosted app: **Start with my own data**, then Budgets → **Restore from a backup file**. Set a password if you have not already.
+In the copy you have been using: Settings (gear icon) → **Save a backup file**. In the hosted app: **Start with my own data**, or tap **Restore a backup** on the first screen. Set a password if you have not already.
 
 ## 4. Sync between devices (optional)
 
@@ -42,8 +42,8 @@ The app keeps one encrypted file, `finance-tracker-sync.json`, in your Google Dr
 
 **In the app**
 
-- First device (the one with your data and a password): Budgets → Sync with Google Drive → paste the client ID → **Connect Google Drive**.
-- Second device: open the app, go to Budgets, paste the same client ID and connect. It asks for your password, then loads your data.
+- First device (the one with your data and a password): Settings → Sync with Google Drive → paste the client ID → **Connect Google Drive**.
+- Second device: open the app, go to Settings, paste the same client ID and connect. It asks for your password, then loads your data.
 
 **How it behaves**
 
